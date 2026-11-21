@@ -27,10 +27,6 @@ wrangler.toml.bak
 .research-telegram-*/
 
 # Artifacts & logs
-app/artifacts/*.json
-!app/artifacts/.gitkeep
-validation/artifacts/*.json
-!validation/artifacts/.gitkeep
 *.log
 *.cpuprofile
 logs/
@@ -68,4 +64,3 @@ graph/
 # All markdown except top-level README are local-only and not pushed to GitHub
 **/*.md
 !/README.md
-!/README_EN.md

@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Telegram WEB Proxy — Cloudflare Worker entry + Relay Durable Object
  *
  * Compatible with telegramdesktop/tproxy-server@52a5feb7 and
@@ -55,8 +55,18 @@ function busy() {
   });
 }
 
+function validOrigin(request, url) {
+  const origin = request.headers.get('Origin');
+  if (!origin) return true;
+  try {
+    return new URL(origin).origin === url.origin;
+  } catch {
+    return false;
+  }
+}
+
 function validApiRequest(request, url) {
-  if (url.search) return false;
+  if (url.search || !validOrigin(request, url)) return false;
   if (url.pathname === '/api/v1/session') {
     if (request.headers.has('Cookie') || !bearer(request.headers.get('Authorization'))) return false;
     if (request.method === 'DELETE') return true;
@@ -256,12 +266,6 @@ export class RelayDO extends DurableObject {
     let frames;
     try { frames = decodeFrames(body); } catch { return notFound(); }
     if (frames.length !== 1 || frames[0].type !== FRAME_TYPES.HELLO || frames[0].streamId !== 0 || Buffer.compare(frames[0].payload, Buffer.of(1)) !== 0) return notFound();
-    const fingerprint = Buffer.from(body).toString('base64url');
-    const existing = this.sessions.get(hash);
-    if (existing) {
-      if (existing.fingerprint !== fingerprint) return notFound();
-      return this.sessionResponse(existing.token, existing.welcome);
-    }
     if (this.sessionSet.size >= MAX_SESSIONS) return busy();
     const sessionToken = randomToken();
     const welcome = encodeFrame(FRAME_TYPES.WELCOME, 0);
@@ -269,14 +273,13 @@ export class RelayDO extends DurableObject {
       token: sessionToken,
       hash: tokenHash(sessionToken),
       bootstrapHash: hash,
-      fingerprint,
       welcome,
       createdAt: Date.now(),
       socket: null,
     };
-    this.sessions.set(hash, session);
     this.sessions.set(session.hash, session);
     this.sessionSet.add(session);
+    this.bootstraps.delete(hash);
     return this.sessionResponse(sessionToken, welcome);
   }
 
